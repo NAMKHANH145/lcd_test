@@ -1,0 +1,275 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_timer.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_panel_ops.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "esp_log.h"
+#include "lvgl.h"
+
+static const char *TAG = "LCD_TEST";
+
+// Pin Configuration
+#define LCD_HOST    SPI2_HOST
+#define PIN_NUM_CS  7
+#define PIN_NUM_DC  8
+#define PIN_NUM_RST 5
+#define PIN_NUM_CLK 4
+#define PIN_NUM_MOSI 6
+#define PIN_NUM_MISO -1
+
+// Display Resolution
+#define LCD_H_RES   172
+#define LCD_V_RES   320
+
+// LVGL Buffer Size
+#define LVGL_BUFFER_SIZE (LCD_H_RES * 40)
+
+static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
+{
+    lv_disp_drv_t *disp_drv = (lv_disp_drv_t *)user_ctx;
+    lv_disp_flush_ready(disp_drv);
+    return false;
+}
+
+static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
+{
+    esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+    int offsetx1 = area->x1;
+    int offsetx2 = area->x2;
+    int offsety1 = area->y1;
+    int offsety2 = area->y2;
+    
+    // Copy the buffer to the display
+    esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
+}
+
+static void increase_lvgl_tick(void *arg)
+{
+    // Tell LVGL how many milliseconds has elapsed
+    lv_tick_inc(2); // 2ms period
+}
+
+// UI Elements
+static lv_obj_t *lbl_temp_val;
+static lv_obj_t *lbl_hr_val;
+static lv_obj_t *lbl_spo2_val;
+
+void create_ui(void)
+{
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+
+    // Main Border (Rounded Rectangle)
+    // The user code draws a rounded rect at 0,0 with size 170x320 and radius 25
+    lv_obj_t * main_container = lv_obj_create(scr);
+    lv_obj_set_size(main_container, 172, 320);
+    lv_obj_set_pos(main_container, 0, 0);
+    lv_obj_set_style_bg_color(main_container, lv_color_black(), 0);
+    lv_obj_set_style_border_color(main_container, lv_color_white(), 0);
+    lv_obj_set_style_border_width(main_container, 2, 0); // 1-2px border
+    lv_obj_set_style_radius(main_container, 25, 0);
+    lv_obj_clear_flag(main_container, LV_OBJ_FLAG_SCROLLABLE);
+    // Remove default padding to match coordinates closer
+    lv_obj_set_style_pad_all(main_container, 0, 0);
+
+
+    // --- Temperature Section ---
+    // "Temp" label at (22, 24)
+    lv_obj_t *lbl_temp_title = lv_label_create(main_container);
+    lv_label_set_text(lbl_temp_title, "Temp");
+    lv_obj_set_pos(lbl_temp_title, 22, 24);
+    lv_obj_set_style_text_color(lbl_temp_title, lv_color_hex(0x00FF00), 0); // Green
+    lv_obj_set_style_text_font(lbl_temp_title, &lv_font_montserrat_20, 0); // Approx size 2
+
+    // Value "--" at (42, 52)
+    lbl_temp_val = lv_label_create(main_container);
+    lv_label_set_text(lbl_temp_val, "--");
+    lv_obj_set_pos(lbl_temp_val, 42, 52);
+    lv_obj_set_style_text_color(lbl_temp_val, lv_color_hex(0x00FFFF), 0); // Cyan (or Red per state)
+    lv_obj_set_style_text_font(lbl_temp_val, &lv_font_montserrat_40, 0); // Large font (Size 4 approx)
+
+    // Degree symbol "C"
+    // Draw a small circle for degree at (128, 54)
+    lv_obj_t *deg_circle = lv_obj_create(main_container);
+    lv_obj_set_size(deg_circle, 6, 6); // 4 radius -> 8 diam? Code says drawEllipse(128, 54, 4, 4) which is w=4, h=4
+    lv_obj_set_pos(deg_circle, 128, 54);
+    lv_obj_set_style_radius(deg_circle, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(deg_circle, 1, 0);
+    lv_obj_set_style_border_color(deg_circle, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_bg_opa(deg_circle, LV_OPA_TRANSP, 0);
+
+    lv_obj_t *lbl_c = lv_label_create(main_container);
+    lv_label_set_text(lbl_c, "C");
+    lv_obj_set_pos(lbl_c, 141, 53);
+    lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_20, 0); // Size 2/3 approx?
+
+
+    // --- HeartRate Section ---
+    // "HeartRate" at (25, 115)
+    lv_obj_t *lbl_hr_title = lv_label_create(main_container);
+    lv_label_set_text(lbl_hr_title, "HeartRate");
+    lv_obj_set_pos(lbl_hr_title, 25, 115);
+    lv_obj_set_style_text_color(lbl_hr_title, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_text_font(lbl_hr_title, &lv_font_montserrat_20, 0);
+
+    // Value "--" at (42, 146)
+    lbl_hr_val = lv_label_create(main_container);
+    lv_label_set_text(lbl_hr_val, "--");
+    lv_obj_set_pos(lbl_hr_val, 42, 146);
+    lv_obj_set_style_text_color(lbl_hr_val, lv_color_hex(0xFF0000), 0); // Red or Cyan
+    lv_obj_set_style_text_font(lbl_hr_val, &lv_font_montserrat_40, 0);
+
+    // "BPM" at (124, 161)
+    lv_obj_t *lbl_bpm = lv_label_create(main_container);
+    lv_label_set_text(lbl_bpm, "BPM");
+    lv_obj_set_pos(lbl_bpm, 124, 161);
+    lv_obj_set_style_text_color(lbl_bpm, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_text_font(lbl_bpm, &lv_font_montserrat_14, 0); // Smaller
+
+
+    // --- SpO2 Section ---
+    // "SpO2" at (26, 204)
+    lv_obj_t *lbl_spo2_title = lv_label_create(main_container);
+    lv_label_set_text(lbl_spo2_title, "SpO2");
+    lv_obj_set_pos(lbl_spo2_title, 26, 204);
+    lv_obj_set_style_text_color(lbl_spo2_title, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_text_font(lbl_spo2_title, &lv_font_montserrat_20, 0);
+
+    // Value "--" at (43, 243)
+    lbl_spo2_val = lv_label_create(main_container);
+    lv_label_set_text(lbl_spo2_val, "--");
+    lv_obj_set_pos(lbl_spo2_val, 43, 243);
+    lv_obj_set_style_text_color(lbl_spo2_val, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_text_font(lbl_spo2_val, &lv_font_montserrat_40, 0);
+
+}
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "Initialize SPI bus");
+    spi_bus_config_t buscfg = {
+        .sclk_io_num = PIN_NUM_CLK,
+        .mosi_io_num = PIN_NUM_MOSI,
+        .miso_io_num = PIN_NUM_MISO,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = LCD_H_RES * LCD_V_RES * sizeof(uint16_t),
+    };
+    ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+    static lv_disp_drv_t disp_drv; // Moved up to be accessible for &disp_drv
+
+    ESP_LOGI(TAG, "Install panel IO");
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    esp_lcd_panel_io_spi_config_t io_config = {
+        .dc_gpio_num = PIN_NUM_DC,
+        .cs_gpio_num = PIN_NUM_CS,
+        .pclk_hz = 40 * 1000 * 1000,
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
+        .spi_mode = 0,
+        .trans_queue_depth = 10,
+        .on_color_trans_done = notify_lvgl_flush_ready,
+        .user_ctx = &disp_drv, // Correctly point to disp_drv
+    };
+    // Attach the LCD to the SPI bus
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle));
+
+    ESP_LOGI(TAG, "Install ST7789 panel driver");
+    esp_lcd_panel_handle_t panel_handle = NULL;
+    esp_lcd_panel_dev_config_t panel_config = {
+        .reset_gpio_num = PIN_NUM_RST,
+        .rgb_endian = LCD_RGB_ENDIAN_RGB,
+        .bits_per_pixel = 16,
+    };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle));
+
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
+    
+    // Set orientation (Portrait, 0 rotation in Arduino code)
+    // ST7789 172x320 often needs offset. 
+    // Usually 240x320 driver, 172x320 visible.
+    // X offset = (240-172)/2 = 34? Or just 0 aligned?
+    // User code says init(172, 320), rotation 0.
+    // We'll try default mirror/swap settings and see.
+    // esp_lcd_panel_swap_xy(panel_handle, true); // Often needed for portrait on some panels
+    // esp_lcd_panel_mirror(panel_handle, false, false);
+    
+    // For 1.47 inch 172x320 ST7789, it's often:
+    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, true)); 
+    ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel_handle, 34, 0)); // 240-172 = 68, /2 = 34.
+    
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+
+    ESP_LOGI(TAG, "Initialize LVGL");
+    lv_init();
+
+    // Allocate draw buffer
+    lv_color_t *buf1 = heap_caps_malloc(LVGL_BUFFER_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    assert(buf1);
+    
+    static lv_disp_draw_buf_t disp_buf;
+    lv_disp_draw_buf_init(&disp_buf, buf1, NULL, LVGL_BUFFER_SIZE);
+
+    // static lv_disp_drv_t disp_drv; // Already defined above
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.hor_res = LCD_H_RES;
+    disp_drv.ver_res = LCD_V_RES;
+    disp_drv.flush_cb = lvgl_flush_cb;
+    disp_drv.draw_buf = &disp_buf;
+    disp_drv.user_data = panel_handle;
+    
+    // Update user_ctx in io handle so flush callback can access disp_drv
+    // Wait, notify_lvgl_flush_ready uses user_ctx passed via io_config.
+    // We need to update that or re-init?
+    // esp_lcd_new_panel_io_spi doesn't let us change user_ctx easily after init?
+    // Actually, we can just pass &disp_drv during config if it was static, but it is static here.
+    // But io_config was passed by value.
+    // Let's use a workaround: The notify callback receives user_ctx.
+    // We can't change it now easily.
+    // BUT: The notify callback is `notify_lvgl_flush_ready`.
+    // We passed user_ctx = NULL.
+    // The callback casts user_ctx to lv_disp_drv_t*.
+    // THIS WILL CRASH if NULL.
+    // We must pass the pointer during init.
+    
+    // RE-DOING Init logic slightly to ensure user_ctx is correct.
+    // Since disp_drv is static, we can pass its address early, even if not initialized yet.
+    // The callback is only called when flush is done, which happens after we start drawing.
+    
+    // NOTE: I cannot edit the code above in the middle of this replacement string.
+    // I will adjust the code I am writing right now.
+    
+    // ... (Code continues in the new_string)
+    
+    // Let's fix the user_ctx issue in the code block below.
+    
+    lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
+
+    // Tick Interface
+    const esp_timer_create_args_t lvgl_tick_timer_args = {
+        .callback = &increase_lvgl_tick,
+        .name = "lvgl_tick"
+    };
+    esp_timer_handle_t lvgl_tick_timer = NULL;
+    ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, 2 * 1000));
+
+    ESP_LOGI(TAG, "Create UI");
+    create_ui();
+
+    while (1) {
+        // Raise the task priority of LVGL and/or sleep to let it run
+        vTaskDelay(pdMS_TO_TICKS(10));
+        lv_timer_handler();
+        
+        // Simulating values
+        // lv_label_set_text_fmt(lbl_temp_val, "36.5");
+    }
+}

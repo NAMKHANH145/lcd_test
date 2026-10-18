@@ -1,0 +1,46 @@
+  đây là code mẫu của bạn tôi, tôi muốn tái hiện giao diện này với chân tương tự, chỉ focus vào màn hình và esp32 s3
+  mini thôi,thông số như sau:Màn hình LCD TFT IPS 1.47 Inch Rounded Corners ST7789V3 SPI Interface có kích thước nhỏ
+  gọn, sử dụng nguồn và mức điện áp giao tiếp là 3.3VDC (nếu sử dụng với các mạch 5VDC như Arduino thì cần thêm chuyển
+  mức giao tiếp), thích hợp với các ứng dụng wearable như đồng hồ thông minh, theo dõi sức khoẻ,...
+
+  Thông số kỹ thuật:
+  Model: LCD TFT IPS 1.47 Inch Rounded Corners ST7789V3 SPI Interface
+  Điện áp sử dụng: 3.3VDC
+  Điện áp giao tiếp: TTL 3.3VDC
+  IC Driver hiển thị: ST7789V3 giao tiếp SPI.
+  Cỡ màn hình: 1.47 inch
+  Độ phân giải: 172 x 320 pixels
+  Kích thước hiển thị:  17.3892 x 32.352mm
+  Kích thước màn hình: 19.39 x 36.28 x 1.46mmModel: Kit phát triển WiFi BLE5 SoC ESP32-S3 Super Mini 4MB Nologo
+  Powerful CPU: ESP32-S3, Xtensa® dual-core 32-bit LX7 microprocessor, up to 240 MHz
+  Integrated 2.4 GHz, 802.11 b/g/n Wi-Fi and Bluetooth LE: Bluetooth 5, Bluetooth mesh
+  Abundant board resources: 384 KB ROM, 512 KB SRAM, 16 KB SRAM in RTC, built-in 4M Flash
+  Ultra-small size: as small as a thumb (22.52x18mm) Classic form factor for wearables and small projects
+  Supports AES-XTS-based flash encryption, RSA-based secure boot, digital signature and HMAC
+  Peripherals
+  GPIO, SPI, LCD interface, Camera interface, UART, I2C, I2S, remote control, pulse counter, LED PWM, USB 1.1 OTG, USB
+  Serial/JTAG controller, MCPWM, SDIO host, GDMA, TWAI® controller (compatible with ISO 11898-1), ADC, touch sensor,
+  temperature sensor, timers and watchdogs
+  Onboard WS2812 RGB Led: GP48 pin, các chân như bạn tôi config nhé, tìm hiểu thư viện để viết lại code trong folder
+  nhé, folder này sử dụng esp-idf nên sẽ phải dùng các lib khác, cứ tự nhiên sửa nhé
+ 
+ I have successfully rewritten the main/lcd_test.c file to recreate the interface using ESP-IDF and LVGL.
+
+  Here is a summary of the changes:
+   1. Drivers: Replaced the raw SPI code with the standard esp_lcd driver for the ST7789 controller, configured with the
+      pins you provided (CS=7, DC=8, RST=5, MOSI=6, CLK=4).
+   2. Graphics Library: Integrated LVGL (Light and Versatile Graphics Library) to handle the UI drawing instead of
+      Adafruit_GFX.
+   3. Interface: Recreated the visual layout:
+       * Main Container: A rounded white border on a black background.
+       * Temperature: Green "Temp" label, large Value placeholder, and Cyan "°C" unit.
+       * Heart Rate: Green "HeartRate" label, large Value placeholder, and Cyan "BPM" unit.
+       * SpO2: Green "SpO2" label and large Value placeholder.
+   4. Configuration:
+       * Updated main/CMakeLists.txt to include necessary dependencies (esp_timer, freertos, lvgl, esp_lcd).
+       * Modified sdkconfig to enable the Montserrat 20 and Montserrat 40 fonts required for the text sizing.
+
+  You can now build and flash the project using:
+   1 idf.py build flash monitor
+
+  The code in main/lcd_test.c is now set up to drive the 1.47-inch ST7789 display directly.

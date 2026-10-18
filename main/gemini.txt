@@ -1,0 +1,222 @@
+1. Định nghĩa Phong cách chung (Global Styles)
+Trước khi vào bố cục, cần quy định mã màu và font chữ để lập trình viên setup trong lv_conf.h hoặc tạo style riêng.
+<GlobalStyles>
+    <Background color="#000000" /> <Font name="Pixel_Font_Small" size="16" />
+    <Font name="Pixel_Font_Large" size="24" />
+
+    <Color name="TEXT_YELLOW" hex="#FFFF00" /> <Color name="ICON_GREEN" hex="#00FF00" />  <Color name="ICON_WHITE" hex="#FFFFFF" />  <Color name="TEXT_WHITE" hex="#FFFFFF" />
+</GlobalStyles>
+2. Màn hình 1: Khởi động (Splash Screen)
+<Screen id="Screen_Splash">
+    <Image id="img_dolphin_logo" 
+           src="dolphin_bitmap.c" 
+           align="CENTER_TOP" 
+           margin_top="20" 
+           width="128" height="64" /> 
+
+    <Container layout="FLEX_COLUMN" align="BOTTOM_MID" margin_bottom="10">
+        
+        <Label text="Finger-clipped monitoring" 
+               font="Pixel_Font_Small" 
+               color="TEXT_WHITE" />
+               
+        <Label text="Using TinyML models" 
+               font="Pixel_Font_Small" 
+               color="TEXT_WHITE" 
+               margin_top="5"/>
+
+        <Label text="Version: 1.0.0" 
+               font="Pixel_Font_Large" 
+               color="TEXT_WHITE" 
+               margin_top="15"/>
+
+        <Label text="A product of ET-TN K68" 
+               font="Pixel_Font_Small" 
+               color="TEXT_WHITE" 
+               margin_top="5"/>
+    </Container>
+</Screen>
+3. Màn hình 2: Dashboard chính (Monitoring)
+Cấu trúc này chia làm 2 phần: Top Bar (Thanh trạng thái) và Data Grid (Lưới dữ liệu).
+<Screen id="Screen_Main_Dashboard">
+    
+    <Container id="Top_Bar" width="100%" height="30" layout="FLEX_ROW_RIGHT">
+        
+        <Image id="icon_bt" 
+               src="bt_icon_white.c" 
+               color="ICON_WHITE" 
+               visible="true" 
+               margin_right="10" />
+
+        <Image id="icon_battery" 
+               src="bat_full_green.c" 
+               color="ICON_GREEN" />
+    </Container>
+
+    <Container layout="FLEX_COLUMN" align="LEFT_MID" padding_left="10">
+
+        <Group id="grp_hr" margin_bottom="10">
+            <Label text="Heart rate:" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            <Container layout="FLEX_ROW">
+                <Label id="val_hr" text="--  " font="Pixel_Font_Large" color="TEXT_YELLOW" />
+                <Label text="bpm" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            </Container>
+        </Group>
+
+        <Group id="grp_spo2" margin_bottom="10">
+            <Label text="SpO2:" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            <Container layout="FLEX_ROW">
+                <Label id="val_spo2" text="--  " font="Pixel_Font_Large" color="TEXT_YELLOW" />
+                <Label text="%" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            </Container>
+        </Group>
+
+        <Group id="grp_temp" margin_bottom="10">
+            <Label text="Temperature:" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            <Container layout="FLEX_ROW">
+                <Label id="val_temp" text="--  " font="Pixel_Font_Large" color="TEXT_YELLOW" />
+                <Label text="°C" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            </Container>
+        </Group>
+
+        <Group id="grp_status">
+            <Label text="Status:" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            <Label id="val_status" text="Stable" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+        </Group>
+
+    </Container>
+</Screen>
+4. Màn hình 3: Dashboard phụ (Stress/Respiration)
+<Screen id="Screen_Secondary_Dashboard">
+    <Include src="#Top_Bar" />
+
+    <Container layout="FLEX_COLUMN" align="LEFT_MID" padding_left="10" margin_top="30">
+        
+        <Group id="grp_status_sec" margin_bottom="15">
+            <Label text="Status:" font="Pixel_Font_Small" color="ICON_GREEN" /> <Label text="Stable" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+        </Group>
+
+        <Group id="grp_resp" margin_bottom="15">
+            <Label text="Respiration:" font="Pixel_Font_Small" color="ICON_GREEN" />
+            <Container layout="FLEX_ROW">
+                <Label id="val_resp" text="--  " font="Pixel_Font_Large" color="TEXT_YELLOW" />
+                <Label text="brpm" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+            </Container>
+        </Group>
+
+        <Group id="grp_stress">
+            <Label text="Stress:" font="Pixel_Font_Small" color="ICON_GREEN" />
+            <Label id="val_stress" text="NO ( -- %)" font="Pixel_Font_Large" color="TEXT_YELLOW" />
+        </Group>
+
+    </Container>
+</Screen>
+
+đây là bản mô tả chi tiết (Specification Note) được cập nhật để bạn chuyển cho đội ngũ thiết kế/coder. 
+Bản này tập trung vào các trạng thái logic (States) và trải nghiệm người dùng (UX) để đảm bảo hệ thống hoạt động mượt mà trên phần cứng thực tế.
+PHẦN 1: YÊU CẦU TÀI NGUYÊN HÌNH ẢNH (ASSETS)
+Yêu cầu coder chuyển các ảnh này thành mảng C (C Array) dùng LV_IMG_CF_TRUE_COLOR (nếu có màu) hoặc ALPHA_1_BIT (để tiết kiệm bộ nhớ).
+
+1. Bộ Icon Bluetooth (Kích thước: 16x16 hoặc 20x20 px)
+img_bt_connected: Icon Bluetooth màu trắng hoặc xanh dương sáng. (Hiển thị khi đã kết nối với App/Phone).
+
+img_bt_disconnected: Icon Bluetooth màu xám mờ hoặc có dấu gạch chéo (hoặc ẩn hẳn đi tùy sở thích).
+2. Bộ Icon Pin (Kích thước: 24x14 px)
+img_bat_full: Hình viên pin đầy vạch (màu Xanh lá/Green). Hiển thị khi pin > 70%.
+
+img_bat_low: Hình viên pin rỗng hoặc còn 1 vạch đỏ (màu Đỏ/Red). Hiển thị khi pin < 20% (Cần nhấp nháy để gây chú ý).
+
+img_bat_charging: Hình viên pin có dấu tia sét bên trong hoặc bên cạnh (Màu Vàng/Yellow hoặc Trắng). Hiển thị khi cắm sạc bất kể % pin.
+PHẦN 2: LOGIC HIỂN THỊ DỮ LIỆU (DATA MAPPING)
+Dưới đây là bảng quy ước hiển thị dựa trên giá trị cảm biến đọc được
+Thông số,Trạng thái Chờ (Init/Error),Trạng thái Đo được (Measured),Đơn vị,Màu sắc
+Heart Rate,--,60 đến 180,bpm,Vàng (Yellow)
+SpO2,--,90 đến 100,%,Vàng (Yellow)
+Temp,--,36.5,°C,Vàng (Yellow)
+Respiration,--,12 đến 20,brpm,Vàng (Yellow)
+Stress,Calculating...,NO hoặc YES,%,Xanh (NO) / Đỏ (YES)
+PHẦN 3: LOGIC TRẠNG THÁI & CẢNH BÁO (STATUS & WARNINGS)
+Phần này quan trọng nhất để thiết bị thông minh hơn.
+
+Logic hiển thị dòng "Status":
+Dựa vào dữ liệu từ cảm biến (ví dụ tín hiệu PPG hoặc Accelerometer):
+
+Trạng thái: Stable (Ổn định)
+
+Text: Stable
+
+Màu: Xanh lá (#00FF00)
+
+Hành động: Hiển thị toàn bộ thông số đo được bình thường.
+
+Trạng thái: No Finger (Không có ngón tay)
+
+Text: No Finger
+
+Màu: Đỏ (#FF0000)
+
+Hành động:
+
+Toàn bộ thông số HR, SpO2, Temp lập tức chuyển về --.
+
+Có thể hiện một Popup hoặc nhấp nháy dòng chữ No Finger để nhắc người dùng đặt tay vào.
+
+Trạng thái: Shaking (Đang rung lắc/Nhiễu)
+
+Text: Shaking
+
+Màu: Cam/Vàng nghệ (#FFA500)
+
+Hành động: Giữ nguyên giá trị cũ gần nhất (Last known value) nhưng đổi màu số đo sang màu Xám (để báo hiệu giá trị này đang không tin cậy).
+
+PHẦN 4: GHI CHÚ UI/UX CHO MÀN HÌNH NHỎ (SPECIAL NOTES)
+Để màn hình đẹp và chuyên nghiệp hơn trên ESP32:
+
+Padding (Khoảng cách): Không bao giờ để chữ sát mép màn hình. Luôn padding ít nhất 2px đến 5px từ viền màn hình để tránh bị vỏ thiết bị che mất (overscan).
+
+Font Monospaced (Font đơn cách): Với các con số thay đổi liên tục (như nhịp tim nhảy 70 -> 120), yêu cầu coder dùng font mà các số có độ rộng bằng nhau. Điều này giúp giao diện không bị "giật" (jitter) sang trái phải khi số thay đổi.
+
+Làm mượt số liệu (Smoothing): Đừng hiển thị trực tiếp giá trị Raw. Hãy lấy trung bình cộng của 5-10 mẫu trước khi update lên màn hình để số không bị nhảy loạn xạ.
+
+Blinking Alert: Nếu SpO2 < 90% hoặc Temp > 38°C, hãy lập trình cho chỉ số đó đổi sang màu Đỏ và nhấp nháy (blink) chu kỳ 500ms.
+PHẦN 5: BẢN MÔ TẢ XML CẬP NHẬT (CHO CODER)
+<Screen id="Main_Monitor">
+    
+    <Container layout="FLEX_ROW_RIGHT" height="30">
+        <Image id="bt_icon" src="{is_connected ? 'bt_connected' : 'bt_disconnected'}" />
+        
+        <Image id="bat_icon" src="{is_charging ? 'bat_charging' : (bat_level < 20 ? 'bat_low' : 'bat_full')}" />
+    </Container>
+
+    <Container layout="FLEX_COLUMN">
+        
+        <Group>
+            <Label text="Heart Rate: " color="TEXT_YELLOW"/>
+            <Label text="{status == 'NO_FINGER' ? '--' : hr_value}" unit=" bpm" />
+        </Group>
+
+        <Group>
+            <Label text="SpO2: " color="TEXT_YELLOW"/>
+            <Label text="{status == 'NO_FINGER' ? '--' : spo2_value}" 
+                   color="{spo2_value < 90 ? 'RED' : 'YELLOW'}"
+                   animation="{spo2_value < 90 ? 'BLINK' : 'NONE'}"
+                   unit=" %" />
+        </Group>
+
+        <Container margin_top="20" align="CENTER">
+            <Label text="Status:" font="Small_Font" color="WHITE"/>
+            
+            <Label id="lbl_status" 
+                   text="{status_code}" 
+                   color="{status_code == 'Stable' ? 'GREEN' : (status_code == 'Shaking' ? 'ORANGE' : 'RED')}" 
+                   font="Large_Font_Bold"/>
+                   
+            <Overlay visible="{status_code == 'No Finger'}">
+                <Box color="RED" opacity="50%">
+                    <Label text="CHECK SENSOR!" color="WHITE" align="CENTER"/>
+                </Box>
+            </Overlay>
+        </Container>
+
+    </Container>
+</Screen>
